@@ -8,6 +8,9 @@ import { Element, Page } from '@/lib/types';
 import { validateApiKey, logApiUsage } from '@/lib/api/apiKeys';
 import { getTemplateById } from '@/lib/api/templatesServer';
 
+// Force Node.js runtime (required for Puppeteer/Chromium)
+export const runtime = "nodejs";
+
 // Vercel serverless function config
 export const maxDuration = 60; // Allow up to 60 seconds for PDF generation
 
@@ -56,7 +59,7 @@ async function getBrowserConfig(pageWidth: number, pageHeight: number) {
             args: chromium.args,
             defaultViewport: { width: pageWidth, height: pageHeight },
             executablePath: await chromium.executablePath(),
-            headless: true,
+            headless: chromium.headless,
         };
     }
 }
