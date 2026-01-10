@@ -59,7 +59,7 @@ async function getBrowserConfig(pageWidth: number, pageHeight: number) {
             args: chromium.args,
             defaultViewport: { width: pageWidth, height: pageHeight },
             executablePath: await chromium.executablePath(),
-            headless: chromium.headless,
+            headless: "shell" as const, // Use new headless mode for serverless
         };
     }
 }
