@@ -31,32 +31,54 @@ export function Canvas({
         const y = e.clientY - rect.top;
 
         // Create new element based on type
-        const newElement: Element = {
+        const baseElement = {
             id: `element-${Date.now()}`,
-            type: elementType as any,
             x: Math.max(0, x - 50),
             y: Math.max(0, y - 25),
             width: 200,
             height: 40,
-            ...(elementType === "text" && {
-                content: "Sample Text",
-                fontSize: 14,
-                fontWeight: "normal" as const,
-                align: "left" as const,
-            }),
-            ...(elementType === "image" && {
-                src: "",
-                maintainAspectRatio: true,
-            }),
-            ...(elementType === "line" && {
-                thickness: 1,
-                height: 2,
-            }),
-            ...(elementType === "table" && {
-                columns: ["Item", "Quantity", "Price"],
-                height: 100,
-            }),
         };
+
+        let newElement: Element;
+
+        switch (elementType) {
+            case "text":
+                newElement = {
+                    ...baseElement,
+                    type: "text",
+                    content: "Sample Text",
+                    fontSize: 14,
+                    fontWeight: "normal",
+                    align: "left",
+                };
+                break;
+            case "image":
+                newElement = {
+                    ...baseElement,
+                    type: "image",
+                    src: "",
+                    maintainAspectRatio: true,
+                };
+                break;
+            case "line":
+                newElement = {
+                    ...baseElement,
+                    type: "line",
+                    height: 2,
+                    thickness: 1,
+                };
+                break;
+            case "table":
+                newElement = {
+                    ...baseElement,
+                    type: "table",
+                    height: 100, // Default height for table
+                    columns: ["Item", "Quantity", "Price"],
+                };
+                break;
+            default:
+                return;
+        }
 
         onAddElement(newElement);
     };

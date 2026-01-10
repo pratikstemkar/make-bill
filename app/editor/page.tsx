@@ -100,7 +100,7 @@ export default function EditorPage() {
 
     const handleUpdateElement = (id: string, updates: Partial<Element>) => {
         setElements((prev) =>
-            prev.map((el) => (el.id === id ? { ...el, ...updates } : el))
+            prev.map((el) => (el.id === id ? ({ ...el, ...updates } as Element) : el))
         );
     };
 
