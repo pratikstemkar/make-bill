@@ -1,12 +1,21 @@
 "use client";
 
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { FileText, Layers, Zap, ArrowRight, Code2, Palette, LogOut } from "lucide-react";
+import { FileText, Layers, Zap, ArrowRight, Code2, Palette } from "lucide-react";
 import Link from "next/link";
 import { useAuthStore } from "@/store/authStore";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { UserMenu } from "@/components/UserMenu";
 
 export default function LandingPage() {
-    const { isAuthenticated, user, logout } = useAuthStore();
+    const { isAuthenticated } = useAuthStore();
+    const { initializeAuth } = useSupabaseAuth();
+
+    // Initialize auth state on mount
+    useEffect(() => {
+        initializeAuth();
+    }, [initializeAuth]);
 
     return (
         <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
@@ -22,15 +31,7 @@ export default function LandingPage() {
                             Templates
                         </Link>
                         {isAuthenticated ? (
-                            <>
-                                <span className="text-sm text-muted-foreground">
-                                    {user?.name}
-                                </span>
-                                <Button onClick={logout} variant="ghost" size="sm" className="gap-2">
-                                    <LogOut className="w-4 h-4" />
-                                    Logout
-                                </Button>
-                            </>
+                            <UserMenu />
                         ) : (
                             <Link href="/login">
                                 <Button variant="ghost" size="sm">Login</Button>
@@ -77,10 +78,12 @@ export default function LandingPage() {
                                 <ArrowRight className="w-4 h-4" />
                             </Button>
                         </Link>
-                        <Button variant="outline" size="lg" className="gap-2 text-base px-8">
-                            <Code2 className="w-4 h-4" />
-                            View API Docs
-                        </Button>
+                        <Link href="/docs">
+                            <Button variant="outline" size="lg" className="gap-2 text-base px-8">
+                                <Code2 className="w-4 h-4" />
+                                View API Docs
+                            </Button>
+                        </Link>
                     </div>
                 </div>
             </section >
@@ -145,11 +148,11 @@ export default function LandingPage() {
                             <div className="w-3 h-3 rounded-full bg-destructive/70" />
                             <div className="w-3 h-3 rounded-full bg-chart-4/70" />
                             <div className="w-3 h-3 rounded-full bg-chart-2/70" />
-                            <span className="ml-4 text-xs text-muted-foreground font-mono">POST /api/pdf/generate</span>
+                            <span className="ml-4 text-xs text-muted-foreground font-mono">POST /api/generate-pdf</span>
                         </div>
                         <pre className="p-6 text-sm overflow-x-auto">
                             <code className="text-muted-foreground">
-                                {`curl -X POST https://api.make-bill.com/api/pdf/generate \\
+                                {`curl -X POST https://make-bill.com/api/generate-pdf \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{

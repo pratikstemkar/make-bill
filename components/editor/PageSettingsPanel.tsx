@@ -2,6 +2,9 @@
 
 import { Page, PageSize, PageOrientation, PAGE_SIZES, getPageDimensions } from "@/lib/types";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Settings } from "lucide-react";
 
 interface PageSettingsPanelProps {
@@ -41,54 +44,59 @@ export function PageSettingsPanel({ page, onUpdate }: PageSettingsPanelProps) {
                 {/* Page Size */}
                 <div>
                     <Label className="text-xs mb-1">Page Size</Label>
-                    <select
+                    <Select
                         value={page.size}
-                        onChange={(e) => handleSizeChange(e.target.value as PageSize)}
-                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        onValueChange={(value) => handleSizeChange(value as PageSize)}
                     >
-                        <option value="A4">A4 (210 × 297 mm)</option>
-                        <option value="Letter">Letter (8.5 × 11 in)</option>
-                        <option value="Legal">Legal (8.5 × 14 in)</option>
-                        <option value="A3">A3 (297 × 420 mm)</option>
-                        <option value="A5">A5 (148 × 210 mm)</option>
-                    </select>
+                        <SelectTrigger className="h-9 text-sm">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="A4">A4 (210 × 297 mm)</SelectItem>
+                            <SelectItem value="Letter">Letter (8.5 × 11 in)</SelectItem>
+                            <SelectItem value="Legal">Legal (8.5 × 14 in)</SelectItem>
+                            <SelectItem value="A3">A3 (297 × 420 mm)</SelectItem>
+                            <SelectItem value="A5">A5 (148 × 210 mm)</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
 
                 {/* Orientation */}
                 <div>
                     <Label className="text-xs mb-1">Orientation</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                        <button
-                            onClick={() => handleOrientationChange("portrait")}
-                            className={`cursor-pointer h-9 px-3 text-sm border rounded-md transition-colors ${page.orientation === "portrait"
-                                ? "border-primary bg-primary text-primary-foreground"
-                                : "border-input bg-background hover:bg-muted"
-                                }`}
+                    <ToggleGroup
+                        type="single"
+                        value={page.orientation}
+                        onValueChange={(value) => {
+                            if (value) handleOrientationChange(value as PageOrientation);
+                        }}
+                        className="grid grid-cols-2"
+                    >
+                        <ToggleGroupItem
+                            value="portrait"
+                            className="h-9 text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
                         >
                             Portrait
-                        </button>
-                        <button
-                            onClick={() => handleOrientationChange("landscape")}
-                            className={`cursor-pointer h-9 px-3 text-sm border rounded-md transition-colors ${page.orientation === "landscape"
-                                ? "border-primary bg-primary text-primary-foreground"
-                                : "border-input bg-background hover:bg-muted"
-                                }`}
+                        </ToggleGroupItem>
+                        <ToggleGroupItem
+                            value="landscape"
+                            className="h-9 text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
                         >
                             Landscape
-                        </button>
-                    </div>
+                        </ToggleGroupItem>
+                    </ToggleGroup>
                 </div>
 
                 {/* Margin */}
                 <div>
                     <Label className="text-xs mb-1">Margin (px)</Label>
-                    <input
+                    <Input
                         type="number"
                         value={page.margin}
                         onChange={(e) => onUpdate({ margin: Number(e.target.value) })}
-                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                        min="0"
-                        max="50"
+                        className="h-9 text-sm"
+                        min={0}
+                        max={50}
                     />
                 </div>
 

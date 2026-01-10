@@ -1,73 +1,87 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Canvas } from "@/components/editor/Canvas";
 import { ElementToolbar } from "@/components/editor/ElementToolbar";
 import { InspectorPanel } from "@/components/editor/InspectorPanel";
 import { PageSettingsPanel } from "@/components/editor/PageSettingsPanel";
 import { PreviewModal } from "@/components/preview/PreviewModal";
+import { SaveTemplateDialog } from "@/components/editor/SaveTemplateDialog";
 import { Element, Page, A4_PAGE } from "@/lib/types";
-import { FileText, Save, Eye } from "lucide-react";
+import { FileText, Save, Eye, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { UserMenu } from "@/components/UserMenu";
+import { createTemplate, updateTemplate, getTemplate } from "@/lib/api/templates";
+import { toast } from "sonner";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
-// Dummy initial data
-const INITIAL_ELEMENTS: Element[] = [
-    {
-        id: "demo-1",
-        type: "text",
-        x: 50,
-        y: 50,
-        width: 300,
-        height: 40,
-        content: "Invoice",
-        fontSize: 28,
-        fontWeight: "bold",
-        align: "left",
-    },
-    {
-        id: "demo-2",
-        type: "text",
-        x: 50,
-        y: 100,
-        width: 200,
-        height: 30,
-        content: "Customer Name",
-        fontSize: 14,
-        fontWeight: "normal",
-        align: "left",
-        binding: "invoice.customer.name",
-    },
-    {
-        id: "demo-3",
-        type: "line",
-        x: 50,
-        y: 150,
-        width: 694,
-        height: 2,
-        thickness: 2,
-    },
-    {
-        id: "demo-4",
-        type: "table",
-        x: 50,
-        y: 180,
-        width: 694,
-        height: 150,
-        columns: ["Item", "Quantity", "Price", "Total"],
-        binding: "invoice.items",
-    },
-];
+// Default empty state for new templates
+const EMPTY_ELEMENTS: Element[] = [];
 
-export default function EditorPage() {
-    const [elements, setElements] = useState<Element[]>(INITIAL_ELEMENTS);
+function EditorContent() {
+    const searchParams = useSearchParams();
+    const templateId = searchParams.get('template');
+
+    const [elements, setElements] = useState<Element[]>(EMPTY_ELEMENTS);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [page, setPage] = useState<Page>(A4_PAGE);
-    const [leftPanelWidth, setLeftPanelWidth] = useState(256); // 16rem = 256px
-    const [rightPanelWidth, setRightPanelWidth] = useState(320); // 20rem = 320px
+    const [leftPanelWidth, setLeftPanelWidth] = useState(256);
+    const [rightPanelWidth, setRightPanelWidth] = useState(320);
     const [isResizingLeft, setIsResizingLeft] = useState(false);
     const [isResizingRight, setIsResizingRight] = useState(false);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+    const [currentTemplateId, setCurrentTemplateId] = useState<string | null>(templateId);
+    const [templateName, setTemplateName] = useState('');
+    const [templateDescription, setTemplateDescription] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [showLeaveDialog, setShowLeaveDialog] = useState(false);
+    const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+
+    const { initializeAuth } = useSupabaseAuth();
+
+    // Initialize auth state on mount
+    useEffect(() => {
+        initializeAuth();
+    }, [initializeAuth]);
+
+    // Load existing template if templateId is provided
+    useEffect(() => {
+        async function loadTemplate() {
+            if (templateId) {
+                setIsLoading(true);
+                try {
+                    const template = await getTemplate(templateId);
+                    if (template) {
+                        setElements(template.elements as unknown as Element[]);
+                        setPage(template.page as unknown as Page);
+                        setTemplateName(template.name);
+                        setTemplateDescription(template.description || '');
+                        setCurrentTemplateId(template.id);
+                    }
+                } catch (error) {
+                    console.error('Error loading template:', error);
+                    toast.error('Failed to load template');
+                } finally {
+                    setIsLoading(false);
+                }
+            }
+        }
+        loadTemplate();
+    }, [templateId]);
 
     const selectedElement = elements.find((el) => el.id === selectedId) || null;
 
@@ -102,35 +116,84 @@ export default function EditorPage() {
         setElements((prev) =>
             prev.map((el) => (el.id === id ? ({ ...el, ...updates } as Element) : el))
         );
+        setHasUnsavedChanges(true);
     };
 
     const handleAddElement = (element: Element) => {
         setElements((prev) => [...prev, element]);
         setSelectedId(element.id);
+        setHasUnsavedChanges(true);
     };
 
     const handleDeleteElement = () => {
         if (selectedId) {
             setElements((prev) => prev.filter((el) => el.id !== selectedId));
             setSelectedId(null);
+            setHasUnsavedChanges(true);
         }
     };
 
     const handleUpdatePage = (updates: Partial<Page>) => {
         setPage((prev) => ({ ...prev, ...updates }));
+        setHasUnsavedChanges(true);
     };
 
     const handleSave = () => {
-        const template = {
-            id: "template-1",
-            name: "Invoice Template",
-            version: 1,
-            page,
-            elements,
+        setIsSaveDialogOpen(true);
+    };
+
+    const handleSaveTemplate = async (name: string, description: string) => {
+        try {
+            if (currentTemplateId) {
+                // Update existing template
+                await updateTemplate(currentTemplateId, {
+                    name,
+                    description,
+                    page,
+                    elements,
+                });
+                toast.success('Template updated successfully!');
+            } else {
+                // Create new template
+                const newTemplate = await createTemplate({
+                    name,
+                    description,
+                    page,
+                    elements,
+                });
+                setCurrentTemplateId(newTemplate.id);
+                toast.success('Template saved successfully!');
+            }
+            setTemplateName(name);
+            setTemplateDescription(description);
+            setHasUnsavedChanges(false);
+        } catch (error) {
+            console.error('Error saving template:', error);
+            throw error; // Re-throw to let dialog handle it
+        }
+    };
+
+    // Warn user about unsaved changes when leaving page
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (hasUnsavedChanges) {
+                e.preventDefault();
+                e.returnValue = '';
+                return '';
+            }
         };
-        console.log("Template saved:", template);
-        // TODO: Implement save to backend
-        alert("Template saved! (Check console for JSON)");
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [hasUnsavedChanges]);
+
+    // Handle navigation with unsaved changes check
+    const handleNavigation = (href: string) => (e: React.MouseEvent) => {
+        if (hasUnsavedChanges) {
+            e.preventDefault();
+            setPendingNavigation(href);
+            setShowLeaveDialog(true);
+        }
     };
 
     return (
@@ -138,7 +201,7 @@ export default function EditorPage() {
             {/* Top Navbar */}
             <nav className="flex items-center justify-between px-6 py-3 border-b border-border bg-card">
                 <div className="flex items-center gap-4">
-                    <Link href="/" className="flex items-center gap-2 hover:opacity-80">
+                    <Link href="/" onClick={handleNavigation('/')} className="flex items-center gap-2 hover:opacity-80">
                         <FileText className="w-5 h-5 text-primary" />
                         <span className="font-bold">make-bill</span>
                     </Link>
@@ -155,10 +218,16 @@ export default function EditorPage() {
                         <Eye className="w-4 h-4" />
                         Preview
                     </Button>
-                    <Button size="sm" className="gap-2" onClick={handleSave}>
+                    <Button
+                        size="sm"
+                        className="gap-2"
+                        onClick={handleSave}
+                        disabled={currentTemplateId ? !hasUnsavedChanges : false}
+                    >
                         <Save className="w-4 h-4" />
-                        Save Template
+                        {currentTemplateId ? 'Update Template' : 'Save Template'}
                     </Button>
+                    <UserMenu />
                 </div>
             </nav>
 
@@ -223,6 +292,56 @@ export default function EditorPage() {
                 elements={elements}
                 page={page}
             />
+
+            {/* Save Template Dialog */}
+            <SaveTemplateDialog
+                open={isSaveDialogOpen}
+                onOpenChange={setIsSaveDialogOpen}
+                onSave={handleSaveTemplate}
+                initialName={templateName}
+                initialDescription={templateDescription}
+                isUpdate={!!currentTemplateId}
+            />
+
+            {/* Unsaved Changes Confirmation Dialog */}
+            <AlertDialog open={showLeaveDialog} onOpenChange={setShowLeaveDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setPendingNavigation(null)}>
+                            Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => {
+                                setHasUnsavedChanges(false);
+                                if (pendingNavigation) {
+                                    window.location.href = pendingNavigation;
+                                }
+                            }}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            Discard Changes
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
+    );
+}
+
+export default function EditorPage() {
+    return (
+        <Suspense fallback={
+            <div className="h-screen w-full flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+        }>
+            <EditorContent />
+        </Suspense>
     );
 }

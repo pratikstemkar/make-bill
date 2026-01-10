@@ -1,37 +1,87 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { FileText, Plus, Calendar, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { FileText, Plus, Calendar, Pencil, Trash2, Loader2, Copy, Check } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
-
-// Mock templates data
-const MOCK_TEMPLATES = [
-    {
-        id: "template-1",
-        name: "Invoice Template",
-        description: "Standard invoice template with itemized billing",
-        lastModified: "2024-01-15",
-        preview: "/api/placeholder/300/400",
-    },
-    {
-        id: "template-2",
-        name: "Receipt Template",
-        description: "Simple receipt format for quick transactions",
-        lastModified: "2024-01-12",
-        preview: "/api/placeholder/300/400",
-    },
-    {
-        id: "template-3",
-        name: "Quote Template",
-        description: "Professional quote template with terms",
-        lastModified: "2024-01-10",
-        preview: "/api/placeholder/300/400",
-    },
-];
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { UserMenu } from "@/components/UserMenu";
+import { getTemplates, deleteTemplate } from "@/lib/api/templates";
+import { TemplateThumbnail } from "@/components/TemplateThumbnail";
+import { toast } from "sonner";
+import type { DbTemplate } from "@/lib/database.types";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function TemplatesPage() {
-    const [templates] = useState(MOCK_TEMPLATES);
+    const [templates, setTemplates] = useState<DbTemplate[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [deleteId, setDeleteId] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [copiedId, setCopiedId] = useState<string | null>(null);
+    const { initializeAuth } = useSupabaseAuth();
+
+    // Initialize auth state on mount
+    useEffect(() => {
+        initializeAuth();
+    }, [initializeAuth]);
+
+    // Fetch templates
+    useEffect(() => {
+        async function fetchTemplates() {
+            try {
+                const data = await getTemplates();
+                setTemplates(data);
+            } catch (error) {
+                console.error('Error fetching templates:', error);
+                toast.error('Failed to load templates');
+            } finally {
+                setIsLoading(false);
+            }
+        }
+        fetchTemplates();
+    }, []);
+
+    const handleDelete = async () => {
+        if (!deleteId) return;
+
+        setIsDeleting(true);
+        try {
+            await deleteTemplate(deleteId);
+            setTemplates((prev) => prev.filter((t) => t.id !== deleteId));
+            toast.success('Template deleted successfully');
+        } catch (error) {
+            console.error('Error deleting template:', error);
+            toast.error('Failed to delete template');
+        } finally {
+            setIsDeleting(false);
+            setDeleteId(null);
+        }
+    };
+
+    const handleCopyId = async (id: string) => {
+        await navigator.clipboard.writeText(id);
+        setCopiedId(id);
+        toast.success('Template ID copied!');
+        setTimeout(() => setCopiedId(null), 2000);
+    };
+
+    const formatDate = (dateString: string) => {
+        return new Date(dateString).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+        });
+    };
 
     return (
         <div className="min-h-screen bg-background">
@@ -46,12 +96,15 @@ export default function TemplatesPage() {
                         <span className="text-muted-foreground">/</span>
                         <h1 className="text-lg font-semibold">Templates</h1>
                     </div>
-                    <Link href="/editor">
-                        <Button className="gap-2">
-                            <Plus className="w-4 h-4" />
-                            Create New Template
-                        </Button>
-                    </Link>
+                    <div className="flex items-center gap-3">
+                        <Link href="/editor">
+                            <Button className="gap-2">
+                                <Plus className="w-4 h-4" />
+                                Create New Template
+                            </Button>
+                        </Link>
+                        <UserMenu />
+                    </div>
                 </div>
             </header>
 
@@ -60,12 +113,30 @@ export default function TemplatesPage() {
                 {/* Stats/Info Bar */}
                 <div className="mb-8">
                     <p className="text-muted-foreground">
-                        {templates.length} {templates.length === 1 ? "template" : "templates"} created
+                        {isLoading ? (
+                            <Skeleton className="h-5 w-32" />
+                        ) : (
+                            `${templates.length} ${templates.length === 1 ? "template" : "templates"} created`
+                        )}
                     </p>
                 </div>
 
-                {/* Templates Grid */}
-                {templates.length > 0 ? (
+                {/* Loading State */}
+                {isLoading ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {[1, 2, 3, 4].map((i) => (
+                            <div key={i} className="rounded-2xl border border-border overflow-hidden">
+                                <Skeleton className="aspect-[3/4]" />
+                                <div className="p-4 space-y-2">
+                                    <Skeleton className="h-5 w-3/4" />
+                                    <Skeleton className="h-4 w-full" />
+                                    <Skeleton className="h-3 w-1/2" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : templates.length > 0 ? (
+                    /* Templates Grid */
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {templates.map((template) => (
                             <div
@@ -74,10 +145,11 @@ export default function TemplatesPage() {
                             >
                                 {/* Preview */}
                                 <div className="aspect-[3/4] bg-muted relative overflow-hidden">
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <FileText className="w-16 h-16 text-muted-foreground/20" />
-                                    </div>
-                                    <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    <TemplateThumbnail
+                                        elements={template.elements as any[]}
+                                        page={template.page as any}
+                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
 
                                     {/* Actions on hover */}
                                     <div className="absolute inset-x-0 bottom-0 p-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -87,21 +159,41 @@ export default function TemplatesPage() {
                                                 Edit
                                             </Button>
                                         </Link>
-                                        <Button variant="secondary" size="sm" className="gap-2">
-                                            <MoreVertical className="w-3 h-3" />
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            className="gap-2 text-destructive hover:text-destructive"
+                                            onClick={() => setDeleteId(template.id)}
+                                        >
+                                            <Trash2 className="w-3 h-3" />
                                         </Button>
                                     </div>
                                 </div>
 
                                 {/* Info */}
                                 <div className="p-4">
-                                    <h3 className="font-semibold mb-1 truncate">{template.name}</h3>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <h3 className="font-semibold truncate flex-1">{template.name}</h3>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6 ml-2"
+                                            onClick={() => handleCopyId(template.id)}
+                                            title="Copy Template ID"
+                                        >
+                                            {copiedId === template.id ? (
+                                                <Check className="w-3 h-3 text-green-500" />
+                                            ) : (
+                                                <Copy className="w-3 h-3" />
+                                            )}
+                                        </Button>
+                                    </div>
                                     <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
-                                        {template.description}
+                                        {template.description || 'No description'}
                                     </p>
                                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                         <Calendar className="w-3 h-3" />
-                                        <span>Modified {template.lastModified}</span>
+                                        <span>Modified {formatDate(template.updated_at)}</span>
                                     </div>
                                 </div>
                             </div>
@@ -139,6 +231,29 @@ export default function TemplatesPage() {
                     </div>
                 )}
             </main>
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Template</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete this template? This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDelete}
+                            disabled={isDeleting}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {isDeleting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

@@ -88,9 +88,9 @@ export function Canvas({
     };
 
     return (
-        <div className="w-full h-full p-8 bg-muted/30 overflow-auto">
+        <div className="w-full h-full p-8 bg-muted/30 overflow-auto flex">
             <div
-                className="inline-block relative bg-background shadow-2xl border border-border select-none"
+                className="relative bg-background shadow-2xl border border-border select-none m-auto"
                 style={{
                     width: `${page.width}px`,
                     height: `${page.height}px`,

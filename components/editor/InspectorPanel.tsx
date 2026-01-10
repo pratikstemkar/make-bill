@@ -1,10 +1,17 @@
 "use client";
 
+import { useState, useRef } from "react";
 import { Element, TextElement, LineElement, TableElement, ImageElement } from "@/lib/types";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
+import { Upload, X, ImageIcon, Loader2 } from "lucide-react";
+import { uploadImage } from "@/lib/api/images";
+import { toast } from "sonner";
 
 interface InspectorPanelProps {
     element: Element | null;
@@ -147,32 +154,40 @@ function TextProperties({
                 </div>
                 <div>
                     <Label className="text-xs">Weight</Label>
-                    <select
+                    <Select
                         value={element.fontWeight}
-                        onChange={(e) =>
-                            onUpdate({ fontWeight: e.target.value as "normal" | "bold" })
+                        onValueChange={(value) =>
+                            onUpdate({ fontWeight: value as "normal" | "bold" })
                         }
-                        className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
                     >
-                        <option value="normal">Normal</option>
-                        <option value="bold">Bold</option>
-                    </select>
+                        <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="normal">Normal</SelectItem>
+                            <SelectItem value="bold">Bold</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
             </div>
 
             <div>
                 <Label className="text-xs">Alignment</Label>
-                <select
+                <Select
                     value={element.align}
-                    onChange={(e) =>
-                        onUpdate({ align: e.target.value as "left" | "center" | "right" })
+                    onValueChange={(value) =>
+                        onUpdate({ align: value as "left" | "center" | "right" })
                     }
-                    className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
                 >
-                    <option value="left">Left</option>
-                    <option value="center">Center</option>
-                    <option value="right">Right</option>
-                </select>
+                    <SelectTrigger className="h-8 text-xs">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="left">Left</SelectItem>
+                        <SelectItem value="center">Center</SelectItem>
+                        <SelectItem value="right">Right</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
         </div>
     );
@@ -245,37 +260,90 @@ function ImageProperties({
     element: ImageElement;
     onUpdate: (updates: Partial<Element>) => void;
 }) {
-    const handleImageUrlChange = (url: string) => {
-        onUpdate({ src: url });
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [isDragOver, setIsDragOver] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
-        // Load image to get natural dimensions
-        if (url.trim()) {
-            const img = new Image();
+    const handleFileSelect = async (file: File) => {
+        if (!file.type.startsWith('image/')) {
+            toast.error('Please select an image file');
+            return;
+        }
+
+        setIsUploading(true);
+        setUploadProgress(10);
+
+        try {
+            // Simulate progress while uploading
+            const progressInterval = setInterval(() => {
+                setUploadProgress((prev) => Math.min(prev + 10, 90));
+            }, 200);
+
+            const result = await uploadImage(file);
+
+            clearInterval(progressInterval);
+            setUploadProgress(100);
+
+            // Load image to get dimensions
+            const img = new window.Image();
             img.onload = () => {
-                // Calculate natural aspect ratio
                 const naturalAspectRatio = img.naturalWidth / img.naturalHeight;
-
-                // Keep current width, adjust height to match aspect ratio
                 const newHeight = element.width / naturalAspectRatio;
 
                 onUpdate({
-                    src: url,
+                    src: result.url,
                     height: newHeight,
                     naturalAspectRatio: naturalAspectRatio,
                 });
             };
             img.onerror = () => {
-                // Just update the URL if image fails to load
-                console.warn("Failed to load image:", url);
+                onUpdate({ src: result.url });
             };
-            img.src = url;
+            img.src = result.url;
+
+            toast.success('Image uploaded successfully!');
+        } catch (error) {
+            console.error('Upload failed:', error);
+            toast.error('Failed to upload image');
+        } finally {
+            setIsUploading(false);
+            setUploadProgress(0);
         }
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            handleFileSelect(file);
+        }
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragOver(false);
+        const file = e.dataTransfer.files[0];
+        if (file) {
+            handleFileSelect(file);
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragOver(true);
+    };
+
+    const handleDragLeave = () => {
+        setIsDragOver(false);
+    };
+
+    const handleRemoveImage = () => {
+        onUpdate({ src: '' });
     };
 
     const handleAspectRatioToggle = (checked: boolean) => {
         onUpdate({ maintainAspectRatio: checked });
 
-        // If checking the box and we have a natural aspect ratio, snap to it immediately
         if (checked && element.naturalAspectRatio) {
             const newHeight = element.width / element.naturalAspectRatio;
             onUpdate({
@@ -289,23 +357,91 @@ function ImageProperties({
         <div className="space-y-3">
             <h3 className="text-xs font-semibold">Image Properties</h3>
 
+            {/* Upload Area */}
             <div>
-                <Label className="text-xs">Image URL</Label>
-                <Input
-                    value={element.src}
-                    onChange={(e) => handleImageUrlChange(e.target.value)}
-                    placeholder="https://example.com/image.png"
-                    className="h-8 text-xs"
+                <Label className="text-xs mb-2 block">Image</Label>
+
+                {element.src ? (
+                    /* Image Preview */
+                    <div className="relative rounded-lg border border-border overflow-hidden bg-muted">
+                        <img
+                            src={element.src}
+                            alt="Uploaded"
+                            className="w-full h-24 object-contain"
+                        />
+                        {/* Upload Progress Overlay */}
+                        {isUploading && (
+                            <div className="absolute inset-0 bg-background/80 flex flex-col items-center justify-center gap-2">
+                                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                                <p className="text-xs text-muted-foreground">Uploading...</p>
+                                <Progress value={uploadProgress} className="h-1 w-3/4" />
+                            </div>
+                        )}
+                        {/* Hover Actions */}
+                        {!isUploading && (
+                            <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={() => fileInputRef.current?.click()}
+                                >
+                                    Replace
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={handleRemoveImage}
+                                >
+                                    <X className="w-4 h-4" />
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    /* Upload Drop Zone */
+                    <div
+                        onClick={() => !isUploading && fileInputRef.current?.click()}
+                        onDrop={handleDrop}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        className={`
+                            border-2 border-dashed rounded-lg p-4 text-center cursor-pointer
+                            transition-colors
+                            ${isDragOver ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}
+                            ${isUploading ? 'pointer-events-none opacity-50' : ''}
+                        `}
+                    >
+                        {isUploading ? (
+                            <div className="space-y-2">
+                                <Loader2 className="w-6 h-6 mx-auto animate-spin text-muted-foreground" />
+                                <p className="text-xs text-muted-foreground">Uploading...</p>
+                                <Progress value={uploadProgress} className="h-1" />
+                            </div>
+                        ) : (
+                            <>
+                                <ImageIcon className="w-6 h-6 mx-auto text-muted-foreground mb-2" />
+                                <p className="text-xs text-muted-foreground">
+                                    Click or drag image here
+                                </p>
+                            </>
+                        )}
+                    </div>
+                )}
+
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleInputChange}
+                    className="hidden"
                 />
             </div>
 
             <div className="flex items-center gap-2">
-                <input
-                    type="checkbox"
+                <Checkbox
                     id="maintainAspectRatio"
                     checked={element.maintainAspectRatio !== false}
-                    onChange={(e) => handleAspectRatioToggle(e.target.checked)}
-                    className="h-4 w-4 rounded border-input"
+                    onCheckedChange={(checked) => handleAspectRatioToggle(checked === true)}
                 />
                 <Label htmlFor="maintainAspectRatio" className="text-xs cursor-pointer">
                     Maintain aspect ratio on resize

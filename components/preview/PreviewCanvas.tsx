@@ -2,7 +2,6 @@
 
 import { Element, Page } from "@/lib/types";
 import { PreviewElementRenderer } from "./PreviewElementRenderer";
-import { repositionElements } from "@/lib/elementLayout";
 
 interface PreviewCanvasProps {
     elements: Element[];
@@ -11,8 +10,6 @@ interface PreviewCanvasProps {
 }
 
 export function PreviewCanvas({ elements, page, data }: PreviewCanvasProps) {
-    // Reposition elements based on their dynamic heights to prevent overlaps
-    const repositionedElements = repositionElements(elements, data);
 
     return (
         <div>
@@ -36,7 +33,7 @@ export function PreviewCanvas({ elements, page, data }: PreviewCanvasProps) {
                     }}
                 />
 
-                {repositionedElements.map((element) => (
+                {elements.map((element) => (
                     <PreviewElementRenderer
                         key={element.id}
                         element={element}
