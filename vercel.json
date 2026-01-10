@@ -1,7 +1,6 @@
 {
     "functions": {
         "app/api/generate-pdf/route.ts": {
-            "runtime": "nodejs",
             "maxDuration": 30,
             "includeFiles": "node_modules/@sparticuz/chromium/**"
         }
