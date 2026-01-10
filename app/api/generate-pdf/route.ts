@@ -11,6 +11,9 @@ import { getTemplateById } from '@/lib/api/templatesServer';
 // Force Node.js runtime (required for Puppeteer/Chromium)
 export const runtime = "nodejs";
 
+// Force dynamic to prevent Vercel from optimizing away Chromium files
+export const dynamic = "force-dynamic";
+
 // Vercel serverless function config
 export const maxDuration = 60; // Allow up to 60 seconds for PDF generation
 
